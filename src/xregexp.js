@@ -169,7 +169,8 @@ function copyRegex(regex, options) {
         flagsToAdd = '',
         flagsToRemove = '',
         xregexpSource = null,
-        xregexpFlags = null;
+        xregexpFlags = null,
+        source = regex.source;
 
     options = options || {};
 
@@ -181,6 +182,7 @@ function copyRegex(regex, options) {
 
     if (options.addG) {flagsToAdd += 'g';}
     if (options.addY) {flagsToAdd += 'y';}
+    if (options.fakeY) {source += '|()'}
     if (flagsToAdd) {
         flags = clipDuplicates(flags + flagsToAdd);
     }
@@ -203,7 +205,7 @@ function copyRegex(regex, options) {
     // unnecessary for regexes constructed by `XRegExp` because the regex has already undergone the
     // translation to native regex syntax
     regex = augment(
-        new RegExp(regex.source, flags),
+        new RegExp(source, flags),
         hasNamedCapture(regex) ? xData.captureNames.slice(0) : null,
         xregexpSource,
         xregexpFlags,
@@ -791,13 +793,19 @@ XRegExp.escape = function(str) {
 XRegExp.exec = function(str, regex, pos, sticky) {
     var cacheKey = 'g',
         addY = false,
+        fakeY = false,
         match,
         r2;
 
     addY = hasNativeY && !!(sticky || (regex.sticky && sticky !== false));
     if (addY) {
         cacheKey += 'y';
+    } else if (sticky) {
+        cacheKey += 'fakeY'
+        fakeY = true
     }
+
+
 
     regex[REGEX_DATA] = regex[REGEX_DATA] || {};
 
@@ -806,6 +814,7 @@ XRegExp.exec = function(str, regex, pos, sticky) {
         regex[REGEX_DATA][cacheKey] = copyRegex(regex, {
             addG: true,
             addY: addY,
+            fakeY: fakeY,
             removeY: sticky === false,
             isInternalOnly: true
         })
@@ -816,7 +825,7 @@ XRegExp.exec = function(str, regex, pos, sticky) {
     // Fixed `exec` required for `lastIndex` fix, named backreferences, etc.
     match = fixed.exec.call(r2, str);
 
-    if (sticky && match && match.index !== pos) {
+    if (fakeY && match && match.pop() === '') {
         match = null;
     }
 
